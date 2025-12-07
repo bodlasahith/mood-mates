@@ -3,22 +3,73 @@ import supabase from "../supabaseClient";
 
 export default function Feed() {
   const [moods, setMoods] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
-    fetchMoods();
-    const subscription = supabase
-      .channel("public:moods")
-      .on("postgres_changes", { event: "*", schema: "public", table: "moods" }, (payload) => {
-        fetchMoods();
-      })
-      .subscribe();
-    return () => subscription.unsubscribe();
+    getCurrentUser();
   }, []);
 
+  useEffect(() => {
+    if (currentUserId) {
+      fetchMoods();
+      const subscription = supabase
+        .channel("public:moods")
+        .on("postgres_changes", { event: "*", schema: "public", table: "moods" }, (payload) => {
+          fetchMoods();
+        })
+        .subscribe();
+      return () => subscription.unsubscribe();
+    }
+  }, [currentUserId]);
+
+  async function getCurrentUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      // Get the dbUser ID from the users table
+      const { data: dbUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", user.email)
+        .single();
+      if (dbUser) {
+        setCurrentUserId(dbUser.id);
+      }
+    }
+  }
+
   async function fetchMoods() {
+    if (!currentUserId) return;
+
+    // Get user's accepted friends
+    const { data: friendships } = await supabase
+      .from("friends")
+      .select("friend_id")
+      .eq("user_id", currentUserId)
+      .eq("status", "accepted");
+
+    const friendIds = friendships?.map(f => f.friend_id) || [];
+    
+    // Include own user ID to see own moods + friends' moods
+    const userIds = [currentUserId, ...friendIds];
+
+    if (userIds.length === 0) {
+      setMoods([]);
+      return;
+    }
+
+    // Calculate today's date range
+    const today = new Date();
+    const todayStart = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+    // Fetch today's moods only from friends and self
     const { data, error } = await supabase
       .from("moods")
       .select("id,mood,note,created_at,user_id,color,streak")
+      .in("user_id", userIds)
+      .gte("created_at", todayStart.toISOString())
+      .lt("created_at", tomorrowStart.toISOString())
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -42,7 +93,14 @@ export default function Feed() {
 
   return (
     <div>
-      {moods.length === 0 && <div className="empty">No moods yet</div>}
+      <h2 className="text-lg font-semibold text-slate-800 mb-4">Today's Moods</h2>
+      {moods.length === 0 && (
+        <div className="text-center py-8 text-slate-500">
+          <div className="text-2xl mb-2">📅</div>
+          <div className="font-medium">No moods shared today</div>
+          <div className="text-sm mt-1">Check back throughout the day to see what friends are feeling!</div>
+        </div>
+      )}
       {moods.map((m) => (
         <div key={m.id} className="flex gap-3 py-3 border-b border-slate-100">
           <div

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import supabase from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import { useToast } from '../contexts/ToastContext';
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -8,25 +9,26 @@ export default function SignUpPage() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   async function handleSignUp(e) {
     e.preventDefault();
-    if (!username.trim()) return alert("Username is required");
+    if (!username.trim()) return toast.error("Username is required");
     setLoading(true);
     const { error: authError } = await supabase.auth.signUp({ email, password });
     if (authError) {
-      alert(authError.message);
+      toast.error(authError.message);
       setLoading(false);
       return;
     }
     // Create profile row (ignore conflict if already exists)
     const { error: profileErr } = await supabase
       .from("users")
-      .insert([{ username: username.trim(), email, password: "" }]);
+      .insert([{ username: username.trim(), email }]);
     if (profileErr && profileErr.code !== "23505") {
       console.warn("Profile create error", profileErr);
     }
-    alert("Account created! Check your email for confirmation (if enabled)");
+    toast.success("Account created! Check your email for confirmation (if enabled)");
     setLoading(false);
     navigate("/login");
   }

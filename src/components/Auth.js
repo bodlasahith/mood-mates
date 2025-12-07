@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import supabase from "../supabaseClient";
+import { useToast } from '../contexts/ToastContext';
 
 export default function Auth({ onAuth }) {
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -76,7 +78,7 @@ export default function Auth({ onAuth }) {
 
   async function signUp(e) {
     e.preventDefault();
-    if (!username.trim()) return alert("Username is required");
+    if (!username.trim()) return toast.error("Username is required");
 
     setLoading(true);
 
@@ -87,7 +89,7 @@ export default function Auth({ onAuth }) {
     });
 
     if (authError) {
-      alert(authError.message);
+      toast.error(authError.message);
       setLoading(false);
       return;
     }
@@ -95,11 +97,11 @@ export default function Auth({ onAuth }) {
     // Create profile row (ignore conflict if already exists)
     const { error: profileErr } = await supabase
       .from("users")
-      .insert([{ username: username.trim(), email, password: "" }]);
+      .insert([{ username: username.trim(), email }]);
     if (profileErr && profileErr.code !== "23505") {
       console.warn("Profile create error", profileErr);
     }
-    alert("Account created! Check your email for confirmation (if enabled)");
+    toast.success("Account created! Check your email for confirmation (if enabled)");
     setIsSignUp(false);
     setUsername("");
 
@@ -110,7 +112,7 @@ export default function Auth({ onAuth }) {
     e.preventDefault();
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert(error.message);
+    if (error) toast.error(error.message);
     setLoading(false);
   }
 
@@ -123,7 +125,7 @@ export default function Auth({ onAuth }) {
 
   async function updateProfile(e) {
     e.preventDefault();
-    if (!newUsername.trim()) return alert("Username cannot be empty");
+    if (!newUsername.trim()) return toast.error("Username cannot be empty");
 
     setLoading(true);
     const { error } = await supabase
@@ -132,7 +134,7 @@ export default function Auth({ onAuth }) {
       .eq("email", session.user.email);
 
     if (error) {
-      alert(error.message);
+      toast.error(error.message);
     } else {
       setEditingProfile(false);
       fetchUserProfile(session.user.email);

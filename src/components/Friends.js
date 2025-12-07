@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import supabase from "../supabaseClient";
+import { useToast } from '../contexts/ToastContext';
 
 export default function Friends({ user, dbUser }) {
+  const { toast } = useToast();
   const [friends, setFriends] = useState([]);
   const [targetEmail, setTargetEmail] = useState("");
 
@@ -36,54 +38,92 @@ export default function Friends({ user, dbUser }) {
   async function addFriend(e) {
     e.preventDefault();
     if (!targetEmail) return;
-    if (!dbUser?.id) return alert("Profile not ready yet. Please wait a moment.");
-    // look up user by email
+    if (!dbUser?.id) return toast.error("Profile not ready yet. Please wait a moment.");
+
+    // Look up user by email
     const { data: users, error: uerr } = await supabase
       .from("users")
       .select("id,email")
       .eq("email", targetEmail)
       .limit(1);
-    if (uerr) return alert(uerr.message);
-    if (!users || users.length === 0) return alert("No user with that email");
+    if (uerr) return toast.error(uerr.message);
+    if (!users || users.length === 0) return toast.error("No user with that email");
     const friendId = users[0].id;
 
-    if (friendId === dbUser.id) return alert("You can't add yourself as a friend");
+    if (friendId === dbUser.id) return toast.error("You can't add yourself as a friend");
 
+    // Check if friendship already exists
+    const { data: existing } = await supabase
+      .from("friends")
+      .select("id")
+      .or(`and(user_id.eq.${dbUser.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${dbUser.id})`);
+
+    if (existing && existing.length > 0) return toast.warning("Friendship already exists");
+
+    // Create bidirectional friendship - both users get a record
     const { error } = await supabase
       .from("friends")
-      .insert([{ user_id: dbUser.id, friend_id: friendId, status: "pending" }]);
-    if (error) alert(error.message);
+      .insert([
+        { user_id: dbUser.id, friend_id: friendId, status: "sent" },
+        { user_id: friendId, friend_id: dbUser.id, status: "received" }
+      ]);
+
+    if (error) toast.error(error.message);
     else {
       setTargetEmail("");
       fetchFriends();
+      toast.success("Friend request sent!");
     }
   }
 
   async function updateFriendStatus(friendshipId, newStatus) {
+    // First get the friend_id for this friendship
+    const { data: friendship } = await supabase
+      .from("friends")
+      .select("friend_id")
+      .eq("id", friendshipId)
+      .eq("user_id", dbUser.id)
+      .single();
+
+    if (!friendship) return toast.error("Friendship not found");
+
+    // Update both sides of the friendship
     const { error } = await supabase
       .from("friends")
       .update({ status: newStatus })
-      .eq("id", friendshipId)
-      .eq("user_id", dbUser.id);
+      .or(`and(user_id.eq.${dbUser.id},friend_id.eq.${friendship.friend_id}),and(user_id.eq.${friendship.friend_id},friend_id.eq.${dbUser.id})`);
 
     if (error) {
-      alert(error.message);
+      toast.error(error.message);
     } else {
       fetchFriends();
+      if (newStatus === "accepted") {
+        toast.success("Friend request accepted!");
+      }
     }
   }
 
   async function removeFriend(friendshipId) {
     if (!window.confirm("Remove this friend?")) return;
 
+    // First get the friend_id for this friendship
+    const { data: friendship } = await supabase
+      .from("friends")
+      .select("friend_id")
+      .eq("id", friendshipId)
+      .eq("user_id", dbUser.id)
+      .single();
+
+    if (!friendship) return toast.error("Friendship not found");
+
+    // Remove both sides of the friendship
     const { error } = await supabase
       .from("friends")
       .delete()
-      .eq("id", friendshipId)
-      .eq("user_id", dbUser.id);
+      .or(`and(user_id.eq.${dbUser.id},friend_id.eq.${friendship.friend_id}),and(user_id.eq.${friendship.friend_id},friend_id.eq.${dbUser.id})`);
 
     if (error) {
-      alert(error.message);
+      toast.error(error.message);
     } else {
       fetchFriends();
     }
@@ -93,8 +133,12 @@ export default function Friends({ user, dbUser }) {
     switch (status) {
       case "accepted":
         return "bg-green-100 text-green-700";
-      case "pending":
+      case "sent":
+        return "bg-blue-100 text-blue-700";
+      case "received":
         return "bg-yellow-100 text-yellow-700";
+      case "declined":
+        return "bg-gray-100 text-gray-700";
       case "blocked":
         return "bg-red-100 text-red-700";
       default:
@@ -138,13 +182,26 @@ export default function Friends({ user, dbUser }) {
               </span>
             </div>
             <div className="flex flex-col gap-1">
-              {f.status === "pending" && (
-                <button
-                  onClick={() => updateFriendStatus(f.id, "accepted")}
-                  className="px-2 py-1 rounded text-xs bg-green-500 text-white hover:bg-green-600"
-                >
-                  Accept
-                </button>
+              {f.status === "sent" && (
+                <span className="px-2 py-1 text-xs text-slate-500">
+                  Request Sent
+                </span>
+              )}
+              {f.status === "received" && (
+                <>
+                  <button
+                    onClick={() => updateFriendStatus(f.id, "accepted")}
+                    className="px-2 py-1 rounded text-xs bg-green-500 text-white hover:bg-green-600"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => updateFriendStatus(f.id, "declined")}
+                    className="px-2 py-1 rounded text-xs bg-gray-500 text-white hover:bg-gray-600"
+                  >
+                    Decline
+                  </button>
+                </>
               )}
               {f.status === "accepted" && (
                 <button

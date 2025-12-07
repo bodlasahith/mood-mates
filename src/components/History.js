@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import supabase from "../supabaseClient";
+import { useToast } from '../contexts/ToastContext';
 
 export default function History({ user, dbUser }) {
+  const { toast } = useToast();
   const [entries, setEntries] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editNote, setEditNote] = useState("");
@@ -30,7 +32,7 @@ export default function History({ user, dbUser }) {
       .eq("user_id", dbUser.id);
 
     if (error) {
-      alert(error.message);
+      toast.error(error.message);
     } else {
       setEditingId(null);
       setEditNote("");
@@ -48,7 +50,7 @@ export default function History({ user, dbUser }) {
       .eq("user_id", dbUser.id);
 
     if (error) {
-      alert(error.message);
+      toast.error(error.message);
     } else {
       fetchHistory();
     }

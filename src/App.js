@@ -11,6 +11,8 @@ import Navbar from "./components/Navbar";
 import LandingPage from "./components/LandingPage";
 import LoginPage from "./components/LoginPage";
 import SignUpPage from "./components/SignUpPage";
+import { ToastProvider } from './contexts/ToastContext';
+import ToastContainer from './components/ToastContainer';
 
 function AppRoutes() {
   const [session, setSession] = useState(null);
@@ -45,7 +47,7 @@ function AppRoutes() {
         const defaultUsername = (authUser.email || "user").split("@")[0];
         const { data: inserted, error: insertErr } = await supabase
           .from("users")
-          .insert([{ username: defaultUsername, email: authUser.email, password: "" }])
+          .insert([{ username: defaultUsername, email: authUser.email }])
           .select("id,username,email")
           .single();
         if (!insertErr && inserted) {
@@ -113,33 +115,36 @@ function App() {
   };
 
   return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-white text-slate-900">
-        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
-          <div className="max-w-2xl mx-auto flex items-center justify-between py-3 px-4">
-            <div className="font-bold text-lg bg-gradient-to-r from-brand to-brand-light bg-clip-text text-transparent">
-              MoodMates
+    <ToastProvider>
+      <BrowserRouter>
+        <div className="min-h-screen bg-white text-slate-900">
+          <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
+            <div className="max-w-2xl mx-auto flex items-center justify-between py-3 px-4">
+              <div className="font-bold text-lg bg-gradient-to-r from-brand to-brand-light bg-clip-text text-transparent">
+                MoodMates
+              </div>
+              {session?.user && (
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Log Out
+                </button>
+              )}
             </div>
-            {session?.user && (
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Log Out
-              </button>
-            )}
-          </div>
-        </header>
-        <main className="max-w-2xl mx-auto pt-4 pb-24 px-4">
-          <AppRoutes />
-        </main>
-        <footer className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200">
-          <div className="max-w-2xl mx-auto py-2 px-4">
-            <Navbar />
-          </div>
-        </footer>
-      </div>
-    </BrowserRouter>
+          </header>
+          <main className="max-w-2xl mx-auto pt-4 pb-24 px-4">
+            <AppRoutes />
+          </main>
+          <footer className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200">
+            <div className="max-w-2xl mx-auto py-2 px-4">
+              <Navbar />
+            </div>
+          </footer>
+        </div>
+        <ToastContainer />
+      </BrowserRouter>
+    </ToastProvider>
   );
 }
 
