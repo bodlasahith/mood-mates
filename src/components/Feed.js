@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from "react";
 import supabase from "../supabaseClient";
 
-export default function Feed() {
+export default function Feed({ user, dbUser }) {
   const [moods, setMoods] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
-    getCurrentUser();
-  }, []);
+    if (dbUser?.id) {
+      fetchMoods();
+      const subscription = supabase
+        .channel("public:moods")
+        .on("postgres_changes", { event: "*", schema: "public", table: "moods" }, (payload) => {
+          fetchMoods();
+        })
+        .subscribe();
+      return () => subscription.unsubscribe();
+    }
+  }, [dbUser?.id]);
 
   useEffect(() => {
     if (currentUserId) {
@@ -23,7 +32,9 @@ export default function Feed() {
   }, [currentUserId]);
 
   async function getCurrentUser() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user?.email) {
       // Get the dbUser ID from the users table
       const { data: dbUser } = await supabase
@@ -38,40 +49,42 @@ export default function Feed() {
   }
 
   async function fetchMoods() {
-    if (!currentUserId) return;
+    if (!dbUser?.id) return;
 
-    // Get user's accepted friends
+    // Get the current user's friends
     const { data: friendships } = await supabase
       .from("friends")
       .select("friend_id")
-      .eq("user_id", currentUserId)
-      .eq("status", "accepted");
+      .eq("user_id", dbUser.id);
 
-    const friendIds = friendships?.map(f => f.friend_id) || [];
-    
-    // Include own user ID to see own moods + friends' moods
-    const userIds = [currentUserId, ...friendIds];
+    // Filter to only mutual friends (where both users have added each other)
+    const mutualFriendIds = [];
+    for (const friendship of friendships || []) {
+      const { data: mutualFriend } = await supabase
+        .from("friends")
+        .select("id")
+        .eq("user_id", friendship.friend_id)
+        .eq("friend_id", dbUser.id)
+        .single();
 
-    if (userIds.length === 0) {
-      setMoods([]);
-      return;
+      if (mutualFriend) {
+        mutualFriendIds.push(friendship.friend_id);
+      }
     }
 
-    // Calculate today's date range
-    const today = new Date();
-    const todayStart = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    const allowedUserIds = [dbUser.id, ...mutualFriendIds];
 
-    // Fetch today's moods only from friends and self
+    // Get start of today in local timezone
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = today.toISOString();
+
     const { data, error } = await supabase
       .from("moods")
       .select("id,mood,note,created_at,user_id,color,streak")
-      .in("user_id", userIds)
-      .gte("created_at", todayStart.toISOString())
-      .lt("created_at", tomorrowStart.toISOString())
-      .order("created_at", { ascending: false })
-      .limit(50);
+      .in("user_id", allowedUserIds)
+      .gte("created_at", todayISO)
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error(error);
@@ -98,7 +111,9 @@ export default function Feed() {
         <div className="text-center py-8 text-slate-500">
           <div className="text-2xl mb-2">📅</div>
           <div className="font-medium">No moods shared today</div>
-          <div className="text-sm mt-1">Check back throughout the day to see what friends are feeling!</div>
+          <div className="text-sm mt-1">
+            Check back throughout the day to see what friends are feeling!
+          </div>
         </div>
       )}
       {moods.map((m) => (

@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import supabase from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { useToast } from '../contexts/ToastContext';
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -9,28 +8,45 @@ export default function SignUpPage() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   async function handleSignUp(e) {
     e.preventDefault();
-    if (!username.trim()) return toast.error("Username is required");
+    if (!username.trim()) return alert("Username is required");
     setLoading(true);
-    const { error: authError } = await supabase.auth.signUp({ email, password });
-    if (authError) {
-      toast.error(authError.message);
+
+    try {
+      // First create the auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) {
+        alert(authError.message);
+        setLoading(false);
+        return;
+      }
+
+      // Then create profile row (this will be automatically created when user confirms email if it fails here)
+      const { error: profileErr } = await supabase.from("users").insert([
+        {
+          username: username.trim(),
+          email,
+        },
+      ]);
+
+      if (profileErr && profileErr.code !== "23505") {
+        console.warn("Profile create error (this is OK, will be created on login):", profileErr);
+      }
+
+      alert("Account created! Please check your email for confirmation link.");
       setLoading(false);
-      return;
+      navigate("/login");
+    } catch (error) {
+      console.error("Signup error:", error);
+      alert("There was an error creating your account. Please try again.");
+      setLoading(false);
     }
-    // Create profile row (ignore conflict if already exists)
-    const { error: profileErr } = await supabase
-      .from("users")
-      .insert([{ username: username.trim(), email }]);
-    if (profileErr && profileErr.code !== "23505") {
-      console.warn("Profile create error", profileErr);
-    }
-    toast.success("Account created! Check your email for confirmation (if enabled)");
-    setLoading(false);
-    navigate("/login");
   }
 
   return (

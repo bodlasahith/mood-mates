@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import supabase from "../supabaseClient";
-import { useToast } from '../contexts/ToastContext';
 
 const EMOJIS = ["🤩", "😊", "😌", "😐", "😕", "😔", "😢"];
 const MOOD_COLORS = {
@@ -19,11 +18,11 @@ export default function MoodLogger({ user, dbUser }) {
   const [todaysMood, setTodaysMood] = useState(null);
   const [isUpdatingMood, setIsUpdatingMood] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+
   async function submitMood(e) {
     e.preventDefault();
-    if (!user) return toast.error("Sign in to log a mood");
-    if (!dbUser?.id) return toast.error("Profile not ready yet. Please wait a moment and try again.");
+    if (!user) return alert("Sign in to log a mood");
+    if (!dbUser?.id) return alert("Profile not ready yet. Please wait a moment and try again.");
     setLoading(true);
 
     // Map emoji to mood text and get color
@@ -56,7 +55,7 @@ export default function MoodLogger({ user, dbUser }) {
       } else if (diffDays === 0) {
         // Same day - prevent multiple logs
         setLoading(false);
-        return toast.warning("You've already logged your mood today! Come back tomorrow to continue your streak.");
+        return alert("You've already logged your mood today! Come back tomorrow to continue your streak.");
       } else if (diffDays > 1) {
         // More than 1 day gap - streak broken, start over
         streak = 1;
@@ -77,10 +76,10 @@ export default function MoodLogger({ user, dbUser }) {
       },
     ]);
     
-    if (error) toast.error(error.message);
+    if (error) alert(error.message);
     else {
       setNote("");
-      toast.success(`Mood logged! Current streak: ${streak} days`);
+      alert(`Mood logged! Current streak: ${streak} days`);
       fetchTodaysMood(); // Refresh today's mood
     }
     setLoading(false);

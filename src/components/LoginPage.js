@@ -1,20 +1,18 @@
 import React, { useState } from "react";
 import supabase from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { useToast } from '../contexts/ToastContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) toast.error(error.message);
+    if (error) alert(error.message);
     setLoading(false);
   }
 
