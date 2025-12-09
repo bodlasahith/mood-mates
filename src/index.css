@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* App base tweaks */
 html { -webkit-text-size-adjust: 100%; }
 body { @apply antialiased bg-white text-slate-900; }
 

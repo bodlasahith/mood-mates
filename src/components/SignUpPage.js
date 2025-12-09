@@ -13,22 +13,38 @@ export default function SignUpPage() {
     e.preventDefault();
     if (!username.trim()) return alert("Username is required");
     setLoading(true);
-    const { error: authError } = await supabase.auth.signUp({ email, password });
-    if (authError) {
-      alert(authError.message);
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) {
+        alert(authError.message);
+        setLoading(false);
+        return;
+      }
+
+      const { error: profileErr } = await supabase.from("users").insert([
+        {
+          username: username.trim(),
+          email,
+        },
+      ]);
+
+      if (profileErr && profileErr.code !== "23505") {
+        console.warn("Profile create error (this is OK, will be created on login):", profileErr);
+      }
+
+      alert("Account created! Please check your email for confirmation link.");
       setLoading(false);
-      return;
+      navigate("/login");
+    } catch (error) {
+      console.error("Signup error:", error);
+      alert("There was an error creating your account. Please try again.");
+      setLoading(false);
     }
-    // Create profile row (ignore conflict if already exists)
-    const { error: profileErr } = await supabase
-      .from("users")
-      .insert([{ username: username.trim(), email, password: "" }]);
-    if (profileErr && profileErr.code !== "23505") {
-      console.warn("Profile create error", profileErr);
-    }
-    alert("Account created! Check your email for confirmation (if enabled)");
-    setLoading(false);
-    navigate("/login");
   }
 
   return (

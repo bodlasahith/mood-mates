@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
 import supabase from "./supabaseClient";
-// import Auth from "./components/Auth";
 import MoodLogger from "./components/MoodLogger";
 import Feed from "./components/Feed";
 import History from "./components/History";
@@ -16,7 +15,6 @@ function AppRoutes() {
   const [session, setSession] = useState(null);
   const [dbUser, setDbUser] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
-  // const [view, setView] = useState("feed");
 
   useEffect(() => {
     supabase.auth.getSession().then((r) => setSession(r.data?.session ?? null));
@@ -30,55 +28,91 @@ function AppRoutes() {
 
   const ensureDbUser = useCallback(
     async (authUser) => {
-      if (!authUser || loadingProfile) return;
+      if (!authUser) return;
+
       setLoadingProfile(true);
+
       try {
         const { data, error } = await supabase
           .from("users")
           .select("id,username,email")
           .eq("email", authUser.email)
           .single();
+
         if (!error && data) {
           setDbUser(data);
+          setLoadingProfile(false);
           return;
         }
+
+        console.log("Creating user profile for:", authUser.email);
         const defaultUsername = (authUser.email || "user").split("@")[0];
+
         const { data: inserted, error: insertErr } = await supabase
           .from("users")
-          .insert([{ username: defaultUsername, email: authUser.email, password: "" }])
+          .insert([
+            {
+              username: defaultUsername,
+              email: authUser.email,
+            },
+          ])
           .select("id,username,email")
           .single();
+
         if (!insertErr && inserted) {
+          console.log("User profile created successfully:", inserted);
           setDbUser(inserted);
-        } else if (insertErr && insertErr.code === "23505") {
-          const { data: fetched } = await supabase
+          setLoadingProfile(false);
+          return;
+        }
+
+        if (insertErr && insertErr.code === "23505") {
+          console.log("Duplicate user detected, fetching existing user");
+          const { data: fetched, error: fetchError } = await supabase
             .from("users")
             .select("id,username,email")
             .eq("email", authUser.email)
             .single();
-          if (fetched) setDbUser(fetched);
+
+          if (!fetchError && fetched) {
+            setDbUser(fetched);
+            setLoadingProfile(false);
+            return;
+          }
         }
-      } finally {
+
+        console.error("Failed to create or fetch user profile:", insertErr);
+        setLoadingProfile(false);
+      } catch (error) {
+        console.error("Error in ensureDbUser:", error);
         setLoadingProfile(false);
       }
     },
-    [loadingProfile]
+    []
   );
 
   useEffect(() => {
-    if (user?.email) {
+    if (user?.email && !dbUser && !loadingProfile) {
       ensureDbUser(user);
-    } else {
+    } else if (!user) {
       setDbUser(null);
     }
-  }, [user, ensureDbUser]);
+  }, [user?.email, dbUser, loadingProfile, ensureDbUser]);
 
-  // Redirect signed-in users to /feed
   if (user) {
+    if (loadingProfile) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-64 text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand mb-4"></div>
+          <p className="text-slate-600">Setting up your profile...</p>
+        </div>
+      );
+    }
+
     return (
       <Routes>
         <Route path="/" element={<Navigate to="/feed" replace />} />
-        <Route path="/feed" element={<Feed />} />
+        <Route path="/feed" element={<Feed user={user} dbUser={dbUser} />} />
         <Route path="/log" element={<MoodLogger user={user} dbUser={dbUser} />} />
         <Route path="/history" element={<History user={user} dbUser={dbUser} />} />
         <Route path="/friends" element={<Friends user={user} dbUser={dbUser} />} />
@@ -86,7 +120,6 @@ function AppRoutes() {
       </Routes>
     );
   }
-  // Unauthenticated: show landing and auth pages
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />

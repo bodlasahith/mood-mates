@@ -16,7 +16,7 @@ Social media often feels performative, but traditional journaling apps feel priv
 
 ### Core Interactions
 
-- **Sign up / Login** – Secure user authentication via JWT.
+- **Sign up / Login** – Secure user authentication via Supabase with email verification.
 - **Log Mood** – Select emoji or color (😊 😐 😞 etc.) and add an optional short note.
 - **Feed View** – See friends’ moods for the day in a scrolling, color-coded feed.
 - **History View** – View your past moods as a week/month chart or color calendar.
@@ -37,12 +37,15 @@ Social media often feels performative, but traditional journaling apps feel priv
 ---
 
 ## Technical Design
-
-- **Frontend:** React + Tailwind CSS (responsive, mobile-first UI)
-- **Backend:** Node.js + Express (RESTful API)
-- **Database:** PostgreSQL or SQLite (via Prisma ORM)
-- **Auth:** JWT-based authentication with HTTP-only cookies
-- **External API (optional):** “Quote of the Day” API for fun daily messages
+- Frontend: React + Tailwind CSS (mobile-first) using @supabase/supabase-js for auth, database, and optional realtime updates.
+- Backend: Minimal/optional. Most operations go directly from the client to Supabase; use Supabase Edge Functions or a small Node/Express proxy for privileged workflows if needed (e.g., friend invites/acceptance).
+- Database: Supabase Postgres with RLS-enabled tables (moods, friends). Client reads/writes via SDK under RLS policies.
+- Auth: Supabase Auth (email sign-up/login with verification). Sessions managed by the SDK; no custom JWT handling required.
+- Realtime (optional): Subscribe to mood insert/update events for live feed updates.
+- Storage (optional): Supabase Storage for avatars or media.
+- External API (optional): “Quote of the Day” fetched client-side or via an Edge Function.
+- Environment: REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY provided via .env; service_role key never exposed client-side.
+- Security: Enforce least-privilege RLS policies (users can manage only their data; feed limited to friends).
 
 ### Key Endpoints
 

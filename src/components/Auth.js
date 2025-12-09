@@ -28,7 +28,7 @@ export default function Auth({ onAuth }) {
             const defaultUsername = email.split("@")[0];
             const { data: inserted, error: insertErr } = await supabase
               .from("users")
-              .insert([{ username: defaultUsername, email, password: "" }])
+              .insert([{ username: defaultUsername, email }])
               .select("id,username,email")
               .single();
             if (!insertErr && inserted) {
@@ -76,26 +76,24 @@ export default function Auth({ onAuth }) {
 
   async function signUp(e) {
     e.preventDefault();
-    if (!username.trim()) return alert("Username is required");
+    if (!username.trim()) return alert.error("Username is required");
 
     setLoading(true);
 
-    // First create auth user
     const { error: authError } = await supabase.auth.signUp({
       email,
       password,
     });
 
     if (authError) {
-      alert(authError.message);
+      alert.error(authError.message);
       setLoading(false);
       return;
     }
 
-    // Create profile row (ignore conflict if already exists)
     const { error: profileErr } = await supabase
       .from("users")
-      .insert([{ username: username.trim(), email, password: "" }]);
+      .insert([{ username: username.trim(), email }]);
     if (profileErr && profileErr.code !== "23505") {
       console.warn("Profile create error", profileErr);
     }

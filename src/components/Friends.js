@@ -3,6 +3,7 @@ import supabase from "../supabaseClient";
 
 export default function Friends({ user, dbUser }) {
   const [friends, setFriends] = useState([]);
+  const [incomingRequests, setIncomingRequests] = useState([]);
   const [targetEmail, setTargetEmail] = useState("");
 
   const fetchFriends = useCallback(async () => {
@@ -11,10 +12,15 @@ export default function Friends({ user, dbUser }) {
       .from("friends")
       .select("id,friend_id,status")
       .eq("user_id", dbUser.id);
+    const { data: incoming, error: incomingError } = await supabase
+      .from("friends")
+      .select("id,user_id,status")
+      .eq("friend_id", dbUser.id);
     if (error) {
       console.error(error);
+    } else if (incomingError) {
+      console.error(incomingError);
     } else {
-      // Fetch friend details
       const friendsWithDetails = await Promise.all(
         (data || []).map(async (f) => {
           const { data: userData } = await supabase
@@ -22,10 +28,45 @@ export default function Friends({ user, dbUser }) {
             .select("email,username")
             .eq("id", f.friend_id)
             .single();
-          return { ...f, friendData: userData };
+
+          const { data: mutualFriend } = await supabase
+            .from("friends")
+            .select("id")
+            .eq("user_id", f.friend_id)
+            .eq("friend_id", dbUser.id)
+            .single();
+
+          const displayStatus = mutualFriend ? "friends" : "requested";
+
+          return { ...f, friendData: userData, displayStatus };
         })
       );
+
+      const incomingWithDetails = await Promise.all(
+        (incoming || []).map(async (req) => {
+          const { data: requesterData } = await supabase
+            .from("users")
+            .select("email,username")
+            .eq("id", req.user_id)
+            .single();
+
+          const { data: mutual } = await supabase
+            .from("friends")
+            .select("id")
+            .eq("user_id", dbUser.id)
+            .eq("friend_id", req.user_id)
+            .single();
+
+          const displayStatus = mutual ? "friends" : "requested";
+
+          return { ...req, requesterData, displayStatus, hasReciprocal: Boolean(mutual) };
+        })
+      );
+
+      const pendingIncoming = incomingWithDetails.filter((r) => !r.hasReciprocal);
+
       setFriends(friendsWithDetails);
+      setIncomingRequests(pendingIncoming);
     }
   }, [dbUser?.id]);
 
@@ -37,7 +78,7 @@ export default function Friends({ user, dbUser }) {
     e.preventDefault();
     if (!targetEmail) return;
     if (!dbUser?.id) return alert("Profile not ready yet. Please wait a moment.");
-    // look up user by email
+
     const { data: users, error: uerr } = await supabase
       .from("users")
       .select("id,email")
@@ -49,38 +90,47 @@ export default function Friends({ user, dbUser }) {
 
     if (friendId === dbUser.id) return alert("You can't add yourself as a friend");
 
+    const { data: existing } = await supabase
+      .from("friends")
+      .select("id")
+      .eq("user_id", dbUser.id)
+      .eq("friend_id", friendId)
+      .single();
+
+    if (existing) {
+      alert("You've already added this friend");
+      return;
+    }
+
     const { error } = await supabase
       .from("friends")
-      .insert([{ user_id: dbUser.id, friend_id: friendId, status: "pending" }]);
+      .insert([{ user_id: dbUser.id, friend_id: friendId, status: "requested" }]);
     if (error) alert(error.message);
     else {
       setTargetEmail("");
       fetchFriends();
-    }
-  }
-
-  async function updateFriendStatus(friendshipId, newStatus) {
-    const { error } = await supabase
-      .from("friends")
-      .update({ status: newStatus })
-      .eq("id", friendshipId)
-      .eq("user_id", dbUser.id);
-
-    if (error) {
-      alert(error.message);
-    } else {
-      fetchFriends();
+      alert("Friend request sent!");
     }
   }
 
   async function removeFriend(friendshipId) {
     if (!window.confirm("Remove this friend?")) return;
 
+    const { data: friendship } = await supabase
+      .from("friends")
+      .select("friend_id")
+      .eq("id", friendshipId)
+      .eq("user_id", dbUser.id)
+      .single();
+
+    if (!friendship) return alert("Friendship not found");
+
     const { error } = await supabase
       .from("friends")
       .delete()
-      .eq("id", friendshipId)
-      .eq("user_id", dbUser.id);
+      .or(
+        `and(user_id.eq.${dbUser.id},friend_id.eq.${friendship.friend_id}),and(user_id.eq.${friendship.friend_id},friend_id.eq.${dbUser.id})`
+      );
 
     if (error) {
       alert(error.message);
@@ -89,14 +139,52 @@ export default function Friends({ user, dbUser }) {
     }
   }
 
+  async function acceptFriendRequest(requestId, requesterId) {
+    if (!dbUser?.id) return alert("Profile not ready yet. Please wait a moment.");
+
+    const { data: existing } = await supabase
+      .from("friends")
+      .select("id")
+      .eq("user_id", dbUser.id)
+      .eq("friend_id", requesterId)
+      .single();
+
+    if (!existing) {
+      const { error: insertError } = await supabase
+        .from("friends")
+        .insert([{ user_id: dbUser.id, friend_id: requesterId, status: "friends" }]);
+
+      if (insertError) return alert(insertError.message);
+    }
+
+    await supabase.from("friends").update({ status: "friends" }).eq("id", requestId);
+
+    alert("Friend request accepted");
+    fetchFriends();
+  }
+
+  async function declineFriendRequest(requestId) {
+    if (!dbUser?.id) return alert("Profile not ready yet. Please wait a moment.");
+
+    const { error } = await supabase
+      .from("friends")
+      .delete()
+      .eq("id", requestId)
+      .eq("friend_id", dbUser.id);
+
+    if (error) alert(error.message);
+    else {
+      alert("Friend request declined");
+      fetchFriends();
+    }
+  }
+
   const getStatusColor = (status) => {
     switch (status) {
-      case "accepted":
+      case "friends":
         return "bg-green-100 text-green-700";
-      case "pending":
+      case "requested":
         return "bg-yellow-100 text-yellow-700";
-      case "blocked":
-        return "bg-red-100 text-red-700";
       default:
         return "bg-slate-100 text-slate-700";
     }
@@ -119,6 +207,47 @@ export default function Friends({ user, dbUser }) {
           Add
         </button>
       </form>
+      <div className="mb-4">
+        <div className="text-xs font-semibold text-slate-500 uppercase">Friend Requests</div>
+        <ul className="divide-y divide-slate-100 text-sm mt-2">
+          {incomingRequests.map((req) => (
+            <li key={req.id} className="py-3 flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-slate-800">
+                  {req.requesterData?.username || req.requesterData?.email || "Unknown"}
+                </div>
+                {req.requesterData?.email && req.requesterData?.username && (
+                  <div className="text-xs text-slate-500 mt-0.5">{req.requesterData.email}</div>
+                )}
+                <span
+                  className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${getStatusColor(
+                    req.displayStatus
+                  )}`}
+                >
+                  {req.displayStatus}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => acceptFriendRequest(req.id, req.user_id)}
+                  className="px-2 py-1 rounded text-xs bg-green-600 text-white hover:bg-green-700"
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => declineFriendRequest(req.id)}
+                  className="px-2 py-1 rounded text-xs bg-slate-200 text-slate-700 hover:bg-slate-300"
+                >
+                  Decline
+                </button>
+              </div>
+            </li>
+          ))}
+          {incomingRequests.length === 0 && (
+            <li className="py-3 text-slate-500">No incoming requests</li>
+          )}
+        </ul>
+      </div>
       <ul className="divide-y divide-slate-100 text-sm">
         {friends.map((f) => (
           <li key={f.id} className="py-3 flex items-start justify-between gap-2">
@@ -131,37 +260,13 @@ export default function Friends({ user, dbUser }) {
               )}
               <span
                 className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${getStatusColor(
-                  f.status
+                  f.displayStatus
                 )}`}
               >
-                {f.status}
+                {f.displayStatus}
               </span>
             </div>
             <div className="flex flex-col gap-1">
-              {f.status === "pending" && (
-                <button
-                  onClick={() => updateFriendStatus(f.id, "accepted")}
-                  className="px-2 py-1 rounded text-xs bg-green-500 text-white hover:bg-green-600"
-                >
-                  Accept
-                </button>
-              )}
-              {f.status === "accepted" && (
-                <button
-                  onClick={() => updateFriendStatus(f.id, "blocked")}
-                  className="px-2 py-1 rounded text-xs bg-slate-200 text-slate-700 hover:bg-slate-300"
-                >
-                  Block
-                </button>
-              )}
-              {f.status === "blocked" && (
-                <button
-                  onClick={() => updateFriendStatus(f.id, "accepted")}
-                  className="px-2 py-1 rounded text-xs bg-blue-500 text-white hover:bg-blue-600"
-                >
-                  Unblock
-                </button>
-              )}
               <button
                 onClick={() => removeFriend(f.id)}
                 className="px-2 py-1 rounded text-xs bg-red-500 text-white hover:bg-red-600"

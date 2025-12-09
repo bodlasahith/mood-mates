@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Provide these via environment variables in .env (see README)
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
