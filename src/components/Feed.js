@@ -4,6 +4,8 @@ import supabase from "../supabaseClient";
 export default function Feed({ user, dbUser }) {
   const [moods, setMoods] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [quote, setQuote] = useState({ text: "", author: "" });
+  const [quoteStatus, setQuoteStatus] = useState("idle");
 
   useEffect(() => {
     if (dbUser?.id) {
@@ -30,6 +32,10 @@ export default function Feed({ user, dbUser }) {
       return () => subscription.unsubscribe();
     }
   }, [currentUserId]);
+
+  useEffect(() => {
+    fetchQuote();
+  }, []);
 
   async function getCurrentUser() {
     const {
@@ -104,6 +110,25 @@ export default function Feed({ user, dbUser }) {
     }
   }
 
+  async function fetchQuote() {
+    try {
+      setQuoteStatus("loading");
+      const response = await fetch(
+        "https://api.allorigins.win/get?url=" +
+          encodeURIComponent(
+            "http://api.forismatic.com/api/1.0/?method=getQuote&format=json&lang=en"
+          )
+      );
+      const proxyPayload = await response.json();
+      const quoteData = JSON.parse(proxyPayload.contents);
+      setQuote({ text: quoteData.quoteText, author: quoteData.quoteAuthor || "Unknown" });
+      setQuoteStatus("loaded");
+    } catch (err) {
+      console.error("Failed to fetch quote", err);
+      setQuoteStatus("error");
+    }
+  }
+
   return (
     <div>
       <h2 className="text-lg font-semibold text-slate-800 mb-4">Today's Moods</h2>
@@ -142,6 +167,23 @@ export default function Feed({ user, dbUser }) {
           </div>
         </div>
       ))}
+      <div className="mt-8 p-4 rounded-lg bg-slate-50 border border-slate-200">
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+          Inspiration
+        </div>
+        {quoteStatus === "loading" && (
+          <div className="text-slate-500 text-sm">Fetching a quote...</div>
+        )}
+        {quoteStatus === "error" && (
+          <div className="text-slate-500 text-sm">Could not load a quote right now.</div>
+        )}
+        {quoteStatus === "loaded" && (
+          <div>
+            <div className="text-slate-800 italic">“{quote.text}”</div>
+            <div className="text-slate-500 text-sm mt-1">— {quote.author || "Unknown"}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
