@@ -80,7 +80,6 @@ export default function Auth({ onAuth }) {
 
     setLoading(true);
 
-    // First create auth user
     const { error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -92,7 +91,6 @@ export default function Auth({ onAuth }) {
       return;
     }
 
-    // Create profile row (ignore conflict if already exists)
     const { error: profileErr } = await supabase
       .from("users")
       .insert([{ username: username.trim(), email }]);

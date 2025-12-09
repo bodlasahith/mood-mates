@@ -25,11 +25,9 @@ export default function MoodLogger({ user, dbUser }) {
     if (!dbUser?.id) return alert("Profile not ready yet. Please wait a moment and try again.");
     setLoading(true);
 
-    // Map emoji to mood text and get color
     const moodText = emoji;
     const color = MOOD_COLORS[emoji] || "#000000";
 
-    // Get current streak with better date handling
     const { data: lastMood } = await supabase
       .from("moods")
       .select("created_at, streak")
@@ -43,24 +41,19 @@ export default function MoodLogger({ user, dbUser }) {
       const lastDate = new Date(lastMood[0].created_at);
       const today = new Date();
 
-      // Get dates without time for comparison (normalize to start of day)
       const lastDateOnly = new Date(Date.UTC(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate()));
       const todayOnly = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
 
       const diffDays = Math.floor((todayOnly - lastDateOnly) / (1000 * 60 * 60 * 24));
 
       if (diffDays === 1) {
-        // Yesterday - continue streak
         streak = (lastMood[0].streak || 0) + 1;
       } else if (diffDays === 0) {
-        // Same day - prevent multiple logs
         setLoading(false);
         return alert("You've already logged your mood today! Come back tomorrow to continue your streak.");
       } else if (diffDays > 1) {
-        // More than 1 day gap - streak broken, start over
         streak = 1;
       } else {
-        // Future date (shouldn't happen) - reset to 1
         streak = 1;
       }
     }
@@ -80,7 +73,7 @@ export default function MoodLogger({ user, dbUser }) {
     else {
       setNote("");
       alert(`Mood logged! Current streak: ${streak} days`);
-      fetchTodaysMood(); // Refresh today's mood
+      fetchTodaysMood();
     }
     setLoading(false);
   }
@@ -116,7 +109,6 @@ export default function MoodLogger({ user, dbUser }) {
 
   return (
     <div className="space-y-4">
-      {/* Today's Mood Display - shown when mood is logged */}
       {todaysMood ? (
         <div className="text-center py-8">
           <div className="bg-slate-50 rounded-xl p-6 border mb-4">
@@ -153,7 +145,6 @@ export default function MoodLogger({ user, dbUser }) {
           </div>
         </div>
       ) : (
-        /* Mood Logging Form - only shown when no mood logged today */
         <form className="space-y-4 mobile-form" onSubmit={submitMood}>
       <div className="flex flex-wrap gap-2 mobile-stack">
         {EMOJIS.map((e) => (

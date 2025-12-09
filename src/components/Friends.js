@@ -21,7 +21,6 @@ export default function Friends({ user, dbUser }) {
     } else if (incomingError) {
       console.error(incomingError);
     } else {
-      // Fetch friend details and check for mutual friendship
       const friendsWithDetails = await Promise.all(
         (data || []).map(async (f) => {
           const { data: userData } = await supabase
@@ -30,7 +29,6 @@ export default function Friends({ user, dbUser }) {
             .eq("id", f.friend_id)
             .single();
 
-          // Check if the other person has also added this user
           const { data: mutualFriend } = await supabase
             .from("friends")
             .select("id")
@@ -52,7 +50,6 @@ export default function Friends({ user, dbUser }) {
             .eq("id", req.user_id)
             .single();
 
-          // Check if we already followed back
           const { data: mutual } = await supabase
             .from("friends")
             .select("id")
@@ -82,7 +79,6 @@ export default function Friends({ user, dbUser }) {
     if (!targetEmail) return;
     if (!dbUser?.id) return alert("Profile not ready yet. Please wait a moment.");
 
-    // Look up user by email
     const { data: users, error: uerr } = await supabase
       .from("users")
       .select("id,email")
@@ -94,7 +90,6 @@ export default function Friends({ user, dbUser }) {
 
     if (friendId === dbUser.id) return alert("You can't add yourself as a friend");
 
-    // Check if friendship already exists
     const { data: existing } = await supabase
       .from("friends")
       .select("id")
@@ -121,7 +116,6 @@ export default function Friends({ user, dbUser }) {
   async function removeFriend(friendshipId) {
     if (!window.confirm("Remove this friend?")) return;
 
-    // First get the friend_id for this friendship
     const { data: friendship } = await supabase
       .from("friends")
       .select("friend_id")
@@ -131,7 +125,6 @@ export default function Friends({ user, dbUser }) {
 
     if (!friendship) return alert("Friendship not found");
 
-    // Remove both sides of the friendship
     const { error } = await supabase
       .from("friends")
       .delete()

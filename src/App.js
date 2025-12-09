@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
 import supabase from "./supabaseClient";
-// import Auth from "./components/Auth";
 import MoodLogger from "./components/MoodLogger";
 import Feed from "./components/Feed";
 import History from "./components/History";
@@ -16,7 +15,6 @@ function AppRoutes() {
   const [session, setSession] = useState(null);
   const [dbUser, setDbUser] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
-  // const [view, setView] = useState("feed");
 
   useEffect(() => {
     supabase.auth.getSession().then((r) => setSession(r.data?.session ?? null));
@@ -32,7 +30,6 @@ function AppRoutes() {
     async (authUser) => {
       if (!authUser) return;
 
-      // Prevent multiple simultaneous calls
       setLoadingProfile(true);
 
       try {
@@ -49,7 +46,6 @@ function AppRoutes() {
           return;
         }
 
-        // If user doesn't exist, create them
         console.log("Creating user profile for:", authUser.email);
         const defaultUsername = (authUser.email || "user").split("@")[0];
 
@@ -71,7 +67,6 @@ function AppRoutes() {
           return;
         }
 
-        // Handle duplicate key error (race condition)
         if (insertErr && insertErr.code === "23505") {
           console.log("Duplicate user detected, fetching existing user");
           const { data: fetched, error: fetchError } = await supabase
@@ -87,7 +82,6 @@ function AppRoutes() {
           }
         }
 
-        // If we get here, something went wrong
         console.error("Failed to create or fetch user profile:", insertErr);
         setLoadingProfile(false);
       } catch (error) {
@@ -95,7 +89,7 @@ function AppRoutes() {
         setLoadingProfile(false);
       }
     },
-    [] // Remove loadingProfile from dependencies
+    []
   );
 
   useEffect(() => {
@@ -106,9 +100,7 @@ function AppRoutes() {
     }
   }, [user?.email, dbUser, loadingProfile, ensureDbUser]);
 
-  // Redirect signed-in users to /feed
   if (user) {
-    // Show loading state while setting up user profile
     if (loadingProfile) {
       return (
         <div className="flex flex-col items-center justify-center min-h-64 text-center">
@@ -129,7 +121,6 @@ function AppRoutes() {
       </Routes>
     );
   }
-  // Unauthenticated: show landing and auth pages
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />

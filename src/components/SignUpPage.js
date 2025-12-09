@@ -15,7 +15,6 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      // First create the auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -27,7 +26,6 @@ export default function SignUpPage() {
         return;
       }
 
-      // Then create profile row (this will be automatically created when user confirms email if it fails here)
       const { error: profileErr } = await supabase.from("users").insert([
         {
           username: username.trim(),

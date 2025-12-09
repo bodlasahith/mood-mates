@@ -42,7 +42,6 @@ export default function Feed({ user, dbUser }) {
       data: { user },
     } = await supabase.auth.getUser();
     if (user?.email) {
-      // Get the dbUser ID from the users table
       const { data: dbUser } = await supabase
         .from("users")
         .select("id")
@@ -57,13 +56,11 @@ export default function Feed({ user, dbUser }) {
   async function fetchMoods() {
     if (!dbUser?.id) return;
 
-    // Get the current user's friends
     const { data: friendships } = await supabase
       .from("friends")
       .select("friend_id")
       .eq("user_id", dbUser.id);
 
-    // Filter to only mutual friends (where both users have added each other)
     const mutualFriendIds = [];
     for (const friendship of friendships || []) {
       const { data: mutualFriend } = await supabase
@@ -80,7 +77,6 @@ export default function Feed({ user, dbUser }) {
 
     const allowedUserIds = [dbUser.id, ...mutualFriendIds];
 
-    // Get start of today in local timezone
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayISO = today.toISOString();
@@ -95,7 +91,6 @@ export default function Feed({ user, dbUser }) {
     if (error) {
       console.error(error);
     } else {
-      // Fetch user details for each mood
       const moodsWithUsers = await Promise.all(
         (data || []).map(async (m) => {
           const { data: userData } = await supabase
